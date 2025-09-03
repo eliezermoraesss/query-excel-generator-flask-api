@@ -1,5 +1,4 @@
 import io
-
 import pandas as pd
 from flask import Flask, render_template, request, session, send_file
 from werkzeug.utils import secure_filename
@@ -37,20 +36,28 @@ date_fields = {
     "AD_DHINC": "dd/mm/yyyy HH24:MI:SS",
 }
 
-
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def format_date(value, field):
+    formato = date_fields[field]
+    if hasattr(value, "strftime"):
+        if formato == "dd/mm/yyyy":
+            formatted = value.strftime("%d/%m/%Y")
+            return f"{field} = TO_DATE('{formatted}', 'dd/mm/yyyy')"
+        else:  # data + hora
+            formatted = value.strftime("%d/%m/%Y %H:%M:%S")
+            return f"{field} = TO_DATE('{formatted}', 'dd/mm/yyyy HH24:MI:SS')"
+    else:
+        return f"{field} = TO_DATE('{value}', '{formato}')"
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
-
 @app.errorhandler(413)
 def too_large(e):
     return "Arquivo muito grande! Máximo permitido é 10 MB", 413
-
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -101,7 +108,7 @@ def upload():
 
                 # campos de data
                 if field in date_fields:
-                    clause = f"{field} = TO_DATE('{value}', '{date_fields[field]}')"
+                    clause = format_date(value, field)
                 # campos de texto
                 elif isinstance(value, str):
                     if value.upper().strip() == "APROVADA":
@@ -126,7 +133,6 @@ def upload():
 
     return render_template("result.html", queries=queries)
 
-
 @app.route("/download")
 def download_sql():
     sql_file = session.get("sql_file", "")
@@ -139,7 +145,6 @@ def download_sql():
         download_name="queries.sql",
         mimetype="text/sql",
     )
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
