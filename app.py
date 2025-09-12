@@ -59,7 +59,7 @@ def index():
 def too_large(e):
     return "Arquivo muito grande! Máximo permitido é 10 MB", 413
 
-@app.route("/upload", methods=["POST"])
+@app.route("/query-generator/flask_queries/upload", methods=["POST"])
 def upload():
     file = request.files.get("file")
 
@@ -133,7 +133,7 @@ def upload():
 
     return render_template("result.html", queries=queries)
 
-@app.route("/download")
+@app.route("/query-generator/flask_queries/download")
 def download_sql():
     sql_file = session.get("sql_file", "")
     if not sql_file:
