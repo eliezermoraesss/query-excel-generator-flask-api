@@ -23,7 +23,8 @@ mapping = {
     "NRO. ÚNICO": "NUNOTA",
     "CENTRO RESULTADO": "CODCENCUS",
     "VENDEDOR": "CODVEND",
-    "STATUS NF-E": "STATUSNFE"
+    "STATUS NF-E": "STATUSNFE",
+    "STATUS": "STATUSNFE",
 }
 
 # campos que precisam de TO_DATE
@@ -61,77 +62,75 @@ def too_large(e):
 
 @app.route("/query-generator/flask_queries/upload", methods=["POST"])
 def upload():
-    file = request.files.get("file")
-
-    if not file or file.filename == "":
+    files = request.files.getlist("file")  # vários arquivos
+    if not files or files[0].filename == "":
         return "Nenhum arquivo enviado", 400
 
-    if not allowed_file(file.filename):
-        return "Formato inválido! Envie apenas arquivos .xls ou .xlsx", 400
+    all_queries = []
 
-    filename = secure_filename(file.filename)
+    for file in files:
+        if not allowed_file(file.filename):
+            return f"Formato inválido no arquivo {file.filename}! Envie apenas .xls ou .xlsx", 400
 
-    try:
-        df = pd.read_excel(file)
-    except Exception as e:
-        return f"Erro ao ler o arquivo Excel: {e}", 400
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            return f"Erro ao ler o arquivo {file.filename}: {e}", 400
 
-    # normaliza colunas
-    normalized_columns = [c.strip().upper() for c in df.columns]
+        # normaliza colunas
+        normalized_columns = [c.strip().upper() for c in df.columns]
 
-    # verifica se pelo menos uma coluna do mapping + NUNOTA existem
-    if "NRO. ÚNICO" not in normalized_columns:
-        return "Arquivo fora do padrão necessário (coluna Nro. Único ausente)", 400
+        if "NRO. ÚNICO" not in normalized_columns:
+            return f"Arquivo {file.filename} fora do padrão necessário (coluna Nro. Único ausente)", 400
 
-    valid_cols = [c for c in normalized_columns if c in mapping]
-    if len(valid_cols) <= 1:  # só NUNOTA não basta
-        return "Arquivo fora do padrão necessário (colunas insuficientes)", 400
+        valid_cols = [c for c in normalized_columns if c in mapping]
+        if len(valid_cols) <= 1:
+            return f"Arquivo {file.filename} fora do padrão necessário (colunas insuficientes)", 400
 
-    queries = []
-    for _, row in df.iterrows():
-        set_clauses = []
-        nunota_value = None
+        queries = []
+        for _, row in df.iterrows():
+            set_clauses = []
+            nunota_value = None
 
-        for col in df.columns:
-            normalized = col.strip().upper()
-            if normalized in mapping:
-                field = mapping[normalized]
-                value = row[col]
+            for col in df.columns:
+                normalized = col.strip().upper()
+                if normalized in mapping:
+                    field = mapping[normalized]
+                    value = row[col]
 
-                if pd.isna(value):
-                    continue
+                    if pd.isna(value):
+                        continue
 
-                # pega o NUNOTA só para o WHERE
-                if field == "NUNOTA":
-                    nunota_value = int(value)
-                    continue
+                    if field == "NUNOTA":
+                        nunota_value = int(value)
+                        continue
 
-                # campos de data
-                if field in date_fields:
-                    clause = format_date(value, field)
-                # campos de texto
-                elif isinstance(value, str):
-                    if value.upper().strip() == "APROVADA":
-                        value = "A"
-                    clause = f"{field} = '{value}'"
-                # numéricos
-                else:
-                    clause = f"{field} = {value}"
+                    if field in date_fields:
+                        clause = format_date(value, field)
+                    elif isinstance(value, str):
+                        if value.upper().strip() == "APROVADA":
+                            value = "A"
+                        clause = f"{field} = '{value}'"
+                    else:
+                        clause = f"{field} = {value}"
 
-                set_clauses.append(clause)
+                    set_clauses.append(clause)
 
-        if nunota_value is None:
-            continue
+            if nunota_value is None:
+                continue
 
-        query = f"UPDATE TGFCAB SET {', '.join(set_clauses)} WHERE NUNOTA = {nunota_value};"
-        queries.append(query)
+            query = f"UPDATE TGFCAB SET {', '.join(set_clauses)} WHERE NUNOTA = {nunota_value};"
+            queries.append(query)
 
-    if not queries:
-        return "Arquivo fora do padrão necessário (nenhuma query gerada)", 400
+        if queries:
+            all_queries.append(f"-- Arquivo: {file.filename}")
+            all_queries.extend(queries)
 
-    session["sql_file"] = "\n".join(queries)
+    if not all_queries:
+        return "Nenhuma query gerada", 400
 
-    return render_template("result.html", queries=queries)
+    session["sql_file"] = "\n".join(all_queries)
+    return render_template("result.html", queries=all_queries)
 
 @app.route("/query-generator/flask_queries/download")
 def download_sql():
