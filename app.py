@@ -19,6 +19,7 @@ mapping = {
     "DATA INCLUSÃO": "AD_DHINC",
     "SERIE": "SERIENOTA",
     "CHAVE NF": "CHAVENFE",
+    "CHAVE NF-E": "CHAVENFE",
     "CHAVE NFE": "CHAVENFE",
     "CHAVE ACESSO": "CHAVENFE",
     "CHAVES ACESSO": "CHAVENFE",
