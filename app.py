@@ -1,7 +1,7 @@
 import io
+
 import pandas as pd
 from flask import Flask, render_template, request, session, send_file
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = "laranja"  # necessário para session
@@ -10,7 +10,6 @@ app.secret_key = "laranja"  # necessário para session
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"xls", "xlsx"}
 
-# dicionário de mapeamento (já em uppercase para comparação)
 mapping = {
     "DT. NEG.": "DTNEG",
     "DT. ENTRADA/SAÍDA": "DTENTSAI",
@@ -20,14 +19,21 @@ mapping = {
     "DATA INCLUSÃO": "AD_DHINC",
     "SERIE": "SERIENOTA",
     "CHAVE NF": "CHAVENFE",
+    "CHAVE NFE": "CHAVENFE",
+    "CHAVE ACESSO": "CHAVENFE",
+    "CHAVES ACESSO": "CHAVENFE",
+    "CHAVE DE ACESSO": "CHAVENFE",
+    "CHAVES DE ACESSO": "CHAVENFE",
     "NRO. ÚNICO": "NUNOTA",
     "CENTRO RESULTADO": "CODCENCUS",
     "VENDEDOR": "CODVEND",
     "STATUS NF-E": "STATUSNFE",
+    "STATUS NFE": "STATUSNFE",
     "STATUS": "STATUSNFE",
 }
 
 # campos que precisam de TO_DATE
+
 date_fields = {
     "DTNEG": "dd/mm/yyyy",
     "DTENTSAI": "dd/mm/yyyy",
