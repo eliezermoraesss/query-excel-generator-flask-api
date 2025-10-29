@@ -1,10 +1,14 @@
 # 📌 Gerador de Queries SQL - Flask
 
+![Demonstração2](assets/images/query-generator-02.png)
+![Demonstração2](assets/images/query-generator-03.png)
+
 Este projeto foi desenvolvido para **automatizar um processo manual e oneroso** de geração de queries SQL a partir de planilhas Excel.  
 Antes, era necessário abrir a planilha e utilizar fórmulas (`CONCAT`, `TEXT`) manualmente.  
 Agora, com esta aplicação Flask, é possível enviar um arquivo Excel e gerar automaticamente as queries para atualização de registros no banco de dados.
 
 ---
+![Demonstração1](assets/images/query-generator.gif)
 
 ## 🚀 Tecnologias Utilizadas
 - [Python 3](https://www.python.org/)
