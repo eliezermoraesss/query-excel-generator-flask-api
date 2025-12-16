@@ -4,8 +4,6 @@ import pandas as pd
 from flask import Flask, render_template, request, session, send_file
 
 app = Flask(__name__)
-app.config['APPLICATION_ROOT'] = '/multfer/querygenerator'
-app.secret_key = "laranja"  # necessário para session
 
 # limite de upload: 10 MB
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
