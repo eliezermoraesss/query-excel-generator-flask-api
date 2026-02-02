@@ -37,14 +37,17 @@ mapping_fiscal = {
 }
 
 mapping_invest = {
-    "EMPRESA": "CODEMP",
-    "CODIGO": "CODPROD",
-    "DEMANDA": "DEMANDA",
-    "MINIMO": "ESTMIN",
-    "MAXIMO": "ESTMAX",
-    "DIAS ESTOQUE": "DIASET",
-    "MULTIPLO TRF": "AGRUPTRANSFMIX"
+    "EMPRESA": {"field": "CODEMP", "key": True},
+    "CODIGO": {"field": "CODPROD", "key": True},
+    "DEMANDA": {"field": "DEMANDA"},
+    "MINIMO": {"field": "ESTMIN"},
+    "MAXIMO": {"field": "ESTMAX"},
+    "DIA ESTOQUE": {"field": "DIASEST"},
+    "DIAS ESTOQUE": {"field": "DIASEST"},
+    "MULTIPLO TRF": {"field": "AGRUPTRANSFMIX"},
+    "INVESTIMENTO": {"field": "AD_INVESTIMENTO", "fixed": "'S'"}
 }
+
 
 # campos que precisam de TO_DATE
 date_fields = {
@@ -81,59 +84,64 @@ def too_large(e):
 
 def gerar_query_investimento(df, file):
     all_queries = []
-
-    # normaliza colunas
     df.columns = [c.strip().upper() for c in df.columns]
-
-    required_columns = [
-        "EMPRESA",
-        "CODIGO",
-        "DEMANDA",
-        "MINIMO",
-        "MAXIMO",
-        "INVESTIMENTO",
-        "DIAS ESTOQUE",
-        "MULTIPLO TRF"
-    ]
-
-    for col in required_columns:
-        if col not in df.columns:
-            return []
 
     all_queries.append(f"-- Arquivo: {file.filename}")
 
     for _, row in df.iterrows():
-        codemp = int(row["EMPRESA"])
-        codprod = int(row["CODIGO"])
-        demanda = int(row["DEMANDA"])
-        estmin = int(row["MINIMO"])
-        estmax = int(row["MAXIMO"])
-        diast = int(row["DIAS ESTOQUE"])
-        agrup = int(row["MULTIPLO TRF"])
+        insert_fields = []
+        insert_values = []
+        update_clauses = []
+        where_clauses = []
 
-        # INSERT
+        for col, config in mapping_invest.items():
+            if col not in df.columns:
+                continue
+
+            field = config["field"]
+            value = row[col]
+
+            if pd.isna(value):
+                continue
+
+            if "fixed" in config:
+                insert_fields.append(field)
+                insert_values.append(config["fixed"])
+                update_clauses.append(f"{field} = {config['fixed']}")
+                continue
+
+            if isinstance(value, (int, float)):
+                sql_value = int(value)
+            else:
+                sql_value = f"'{value}'"
+
+            if config.get("key"):
+                where_clauses.append(f"{field} = {sql_value}")
+                insert_fields.append(field)
+                insert_values.append(sql_value)
+            else:
+                insert_fields.append(field)
+                insert_values.append(sql_value)
+                update_clauses.append(f"{field} = {sql_value}")
+
+        if not where_clauses:
+            continue
+
         insert_sql = (
-            "INSERT INTO AD_MIXPRO "
-            "(CODEMP, CODPROD, DEMANDA, ESTMIN, ESTMAX, AD_INVESTIMENTO, DIASEST, AGRUPTRANSFMIX) "
-            f"VALUES ({codemp}, {codprod}, {demanda}, {estmin}, {estmax}, 'S', {diast}, {agrup});"
+            f"INSERT INTO AD_MIXPRO ({', '.join(insert_fields)}) "
+            f"VALUES ({', '.join(map(str, insert_values))});"
         )
 
-        # UPDATE
         update_sql = (
-            "UPDATE AD_MIXPRO SET "
-            f"DEMANDA = {demanda}, "
-            f"ESTMIN = {estmin}, "
-            f"ESTMAX = {estmax}, "
-            "AD_INVESTIMENTO = 'S', "
-            f"DIASEST = {diast}, "
-            f"AGRUPTRANSFMIX = {agrup} "
-            f"WHERE CODPROD = {codprod} AND CODEMP = {codemp};"
+            f"UPDATE AD_MIXPRO SET {', '.join(update_clauses)} "
+            f"WHERE {' AND '.join(where_clauses)};"
         )
 
         all_queries.append(insert_sql)
         all_queries.append(update_sql)
 
     return all_queries
+
 
 
 def gerar_query_fiscal(df, file):
