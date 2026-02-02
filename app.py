@@ -4,12 +4,13 @@ import pandas as pd
 from flask import Flask, render_template, request, session, send_file
 
 app = Flask(__name__)
+app.secret_key = "query-generator-super-secret-key"
 
 # limite de upload: 10 MB
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"xls", "xlsx"}
 
-mapping = {
+mapping_fiscal = {
     "DT. NEG.": "DTNEG",
     "DT. ENTRADA/SAÍDA": "DTENTSAI",
     "DT. DO MOVIMENTO": "DTMOV",
@@ -35,8 +36,17 @@ mapping = {
     "STATUS": "STATUSNFE",
 }
 
-# campos que precisam de TO_DATE
+mapping_invest = {
+    "EMPRESA": "CODEMP",
+    "CODIGO": "CODPROD",
+    "DEMANDA": "DEMANDA",
+    "MINIMO": "ESTMIN",
+    "MAXIMO": "ESTMAX",
+    "DIAS ESTOQUE": "DIASET",
+    "MULTIPLO TRF": "AGRUPTRANSFMIX"
+}
 
+# campos que precisam de TO_DATE
 date_fields = {
     "DTNEG": "dd/mm/yyyy",
     "DTENTSAI": "dd/mm/yyyy",
@@ -69,6 +79,107 @@ def index():
 def too_large(e):
     return "Arquivo muito grande! Máximo permitido é 10 MB", 413
 
+def gerar_query_investimento(df, file):
+    all_queries = []
+
+    # normaliza colunas
+    df.columns = [c.strip().upper() for c in df.columns]
+
+    required_columns = [
+        "EMPRESA",
+        "CODIGO",
+        "DEMANDA",
+        "MINIMO",
+        "MAXIMO",
+        "INVESTIMENTO",
+        "DIAS ESTOQUE",
+        "MULTIPLO TRF"
+    ]
+
+    for col in required_columns:
+        if col not in df.columns:
+            return []
+
+    all_queries.append(f"-- Arquivo: {file.filename}")
+
+    for _, row in df.iterrows():
+        codemp = int(row["EMPRESA"])
+        codprod = int(row["CODIGO"])
+        demanda = int(row["DEMANDA"])
+        estmin = int(row["MINIMO"])
+        estmax = int(row["MAXIMO"])
+        diast = int(row["DIAS ESTOQUE"])
+        agrup = int(row["MULTIPLO TRF"])
+
+        # INSERT
+        insert_sql = (
+            "INSERT INTO AD_MIXPRO "
+            "(CODEMP, CODPROD, DEMANDA, ESTMIN, ESTMAX, AD_INVESTIMENTO, DIASEST, AGRUPTRANSFMIX) "
+            f"VALUES ({codemp}, {codprod}, {demanda}, {estmin}, {estmax}, 'S', {diast}, {agrup});"
+        )
+
+        # UPDATE
+        update_sql = (
+            "UPDATE AD_MIXPRO SET "
+            f"DEMANDA = {demanda}, "
+            f"ESTMIN = {estmin}, "
+            f"ESTMAX = {estmax}, "
+            "AD_INVESTIMENTO = 'S', "
+            f"DIASEST = {diast}, "
+            f"AGRUPTRANSFMIX = {agrup} "
+            f"WHERE CODPROD = {codprod} AND CODEMP = {codemp};"
+        )
+
+        all_queries.append(insert_sql)
+        all_queries.append(update_sql)
+
+    return all_queries
+
+
+def gerar_query_fiscal(df, file):
+    all_queries = []
+
+    queries = []
+    for _, row in df.iterrows():
+        set_clauses = []
+        nunota_value = None
+
+        for col in df.columns:
+            normalized = col.strip().upper()
+            if normalized in mapping_fiscal:
+                field = mapping_fiscal[normalized]
+                value = row[col]
+
+                if pd.isna(value):
+                    continue
+
+                if field == "NUNOTA":
+                    nunota_value = int(value)
+                    continue
+
+                if field in date_fields:
+                    clause = format_date(value, field)
+                elif isinstance(value, str):
+                    if value.upper().strip() == "APROVADA":
+                        value = "A"
+                    clause = f"{field} = '{value}'"
+                else:
+                    clause = f"{field} = {value}"
+
+                set_clauses.append(clause)
+
+        if nunota_value is None:
+            continue
+
+        query = f"UPDATE TGFCAB SET {', '.join(set_clauses)} WHERE NUNOTA = {nunota_value};"
+        queries.append(query)
+
+    if queries:
+        all_queries.append(f"-- Arquivo: {file.filename}")
+        all_queries.extend(queries)
+
+    return all_queries
+
 @app.route("/query-generator/flask_queries/upload", methods=["POST"])
 def upload():
     files = request.files.getlist("file")  # vários arquivos
@@ -89,56 +200,29 @@ def upload():
         # normaliza colunas
         normalized_columns = [c.strip().upper() for c in df.columns]
 
-        if "NRO. ÚNICO" not in normalized_columns:
-            return f"Arquivo {file.filename} fora do padrão necessário (coluna Nro. Único ausente)", 400
+        if "NRO. ÚNICO" in normalized_columns:
+            tipo_operacao = 'fiscal'
+            mapping = mapping_fiscal
+        elif "INVESTIMENTO" in normalized_columns:
+            tipo_operacao = 'investimento'
+            mapping = mapping_invest
+        else:
+            return f"Arquivo {file.filename} fora do padrão necessário", 400
 
         valid_cols = [c for c in normalized_columns if c in mapping]
         if len(valid_cols) <= 1:
             return f"Arquivo {file.filename} fora do padrão necessário (colunas insuficientes)", 400
 
-        queries = []
-        for _, row in df.iterrows():
-            set_clauses = []
-            nunota_value = None
+        if tipo_operacao == 'fiscal':
+            all_queries = gerar_query_fiscal(df, file)
+        elif tipo_operacao == 'investimento':
+            all_queries = gerar_query_investimento(df, file)
 
-            for col in df.columns:
-                normalized = col.strip().upper()
-                if normalized in mapping:
-                    field = mapping[normalized]
-                    value = row[col]
+        if not all_queries:
+            return "Nenhuma query gerada", 400
 
-                    if pd.isna(value):
-                        continue
+        session["sql_file"] = "\n".join(all_queries)
 
-                    if field == "NUNOTA":
-                        nunota_value = int(value)
-                        continue
-
-                    if field in date_fields:
-                        clause = format_date(value, field)
-                    elif isinstance(value, str):
-                        if value.upper().strip() == "APROVADA":
-                            value = "A"
-                        clause = f"{field} = '{value}'"
-                    else:
-                        clause = f"{field} = {value}"
-
-                    set_clauses.append(clause)
-
-            if nunota_value is None:
-                continue
-
-            query = f"UPDATE TGFCAB SET {', '.join(set_clauses)} WHERE NUNOTA = {nunota_value};"
-            queries.append(query)
-
-        if queries:
-            all_queries.append(f"-- Arquivo: {file.filename}")
-            all_queries.extend(queries)
-
-    if not all_queries:
-        return "Nenhuma query gerada", 400
-
-    session["sql_file"] = "\n".join(all_queries)
     return render_template("result.html", queries=all_queries)
 
 @app.route("/query-generator/flask_queries/download")
