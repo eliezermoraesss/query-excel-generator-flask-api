@@ -39,6 +39,7 @@ mapping_fiscal = {
 mapping_invest = {
     "EMPRESA": {"field": "CODEMP", "key": True},
     "CODIGO": {"field": "CODPROD", "key": True},
+    "COD.": {"field": "CODPROD", "key": True},
     "DEMANDA": {"field": "DEMANDA"},
     "MINIMO": {"field": "ESTMIN"},
     "MAXIMO": {"field": "ESTMAX"},
