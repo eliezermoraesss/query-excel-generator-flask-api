@@ -17,6 +17,8 @@ mapping_fiscal = {
     "DT. CONFIRMAÇÃO": "AD_DHCONFIRMACAO",
     "DT. DO FATURAMENTO": "DTFATUR",
     "DATA INCLUSÃO": "AD_DHINC",
+    "DT. DE ALTERAÇÃO": "DTALTER",
+    "DT. DE ALTERACAO": "DTALTER",
     "SERIE": "SERIENOTA",
     "SERIE DA NOTA": "SERIENOTA",
     "SÉRIE DA NOTA": "SERIENOTA",
@@ -59,6 +61,7 @@ date_fields = {
     "AD_DHCONFIRMACAO": "dd/mm/yyyy HH24:MI:SS",
     "DTFATUR": "dd/mm/yyyy HH24:MI:SS",
     "AD_DHINC": "dd/mm/yyyy HH24:MI:SS",
+    "DTALTER": "dd/mm/yyyy HH24:MI:SS"
 }
 
 def allowed_file(filename):
