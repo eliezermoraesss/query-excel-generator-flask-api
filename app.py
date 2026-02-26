@@ -49,6 +49,7 @@ mapping_invest = {
     "DIA ESTOQUE": {"field": "DIASEST"},
     "DIAS ESTOQUE": {"field": "DIASEST"},
     "MULTIPLO TRF": {"field": "AGRUPTRANSFMIX"},
+    "MULTIPLO DE TRF": {"field": "AGRUPTRANSFMIX"},
     "INVESTIMENTO": {"field": "AD_INVESTIMENTO", "fixed": "'S'"}
 }
 
