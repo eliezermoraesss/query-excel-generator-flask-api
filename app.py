@@ -30,6 +30,7 @@ mapping_fiscal = {
     "CHAVES ACESSO": "CHAVENFE",
     "CHAVE DE ACESSO": "CHAVENFE",
     "CHAVES DE ACESSO": "CHAVENFE",
+    "CONFIRMADA": "STATUSNOTA",
     "NRO. ÚNICO": "NUNOTA",
     "CENTRO RESULTADO": "CODCENCUS",
     "VENDEDOR": "CODVEND",
@@ -148,8 +149,6 @@ def gerar_query_investimento(df, file):
 
     return all_queries
 
-
-
 def gerar_query_fiscal(df, file):
     all_queries = []
 
@@ -170,6 +169,9 @@ def gerar_query_fiscal(df, file):
                 if field == "NUNOTA":
                     nunota_value = int(value)
                     continue
+                elif field == "STATUSNOTA":
+                    if isinstance(value, str) and value.upper().strip() == "SIM":
+                        value = "L"
 
                 if field in date_fields:
                     clause = format_date(value, field)
