@@ -196,7 +196,7 @@ def gerar_query_fiscal(df, file):
 
     return all_queries
 
-@app.route("/query-generator/flask_queries/upload", methods=["POST"])
+@app.route("/upload", methods=["POST"])
 def upload():
     files = request.files.getlist("file")  # vários arquivos
     if not files or files[0].filename == "":
@@ -241,7 +241,7 @@ def upload():
 
     return render_template("result.html", queries=all_queries)
 
-@app.route("/query-generator/flask_queries/download")
+@app.route("/download")
 def download_sql():
     sql_file = session.get("sql_file", "")
     if not sql_file:

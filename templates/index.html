@@ -27,11 +27,11 @@
     <div class="container py-5">
         <div class="card shadow-lg p-4 rounded-4 text-center">
             <!-- Logo -->
-            <img src="{{ url_for('static', filename='Logo-Negativo.png') }}" alt="Logo Multfer" class="logo">
+            <img src="/query/static/Logo-Negativo.png" alt="Logo Multfer" class="logo">
 
             <h2 class="mb-4">Gerador de Query</h2>
 
-            <form action="/query-generator/flask_queries/upload" method="post" enctype="multipart/form-data" id="uploadForm">
+            <form action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
                 <!-- Área de Drag & Drop -->
                 <div id="dropzone" class="dropzone mb-3">
                     <p class="mb-0">Arraste seus arquivos Excel aqui ou clique para selecionar</p>
