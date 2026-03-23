@@ -230,14 +230,17 @@ def upload():
             return f"Arquivo {file.filename} fora do padrão necessário (colunas insuficientes)", 400
 
         if tipo_operacao == 'fiscal':
-            all_queries = gerar_query_fiscal(df, file)
+            file_queries = gerar_query_fiscal(df, file)
         elif tipo_operacao == 'investimento':
-            all_queries = gerar_query_investimento(df, file)
+            file_queries = gerar_query_investimento(df, file)
 
-        if not all_queries:
-            return "Nenhuma query gerada", 400
+        if file_queries:
+            all_queries.extend(file_queries)
 
-        session["sql_file"] = "\n".join(all_queries)
+    if not all_queries:
+        return "Nenhuma query gerada", 400
+
+    session["sql_file"] = "\n".join(all_queries)
 
     return render_template("result.html", queries=all_queries)
 
