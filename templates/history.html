@@ -36,12 +36,12 @@
 <body>
     <nav class="navbar navbar-expand-lg topbar">
         <div class="container py-2">
-            <a class="navbar-brand fw-semibold" href="{{ url_for('index') }}">
-                <img src="{{ url_for('static', filename='Logo-Negativo.png') }}" alt="Logo Multfer" class="logo">
+            <a class="navbar-brand fw-semibold" href="https://cloud.multfer.com.br/query">
+                <img src="/query/static/Logo-Negativo.png" alt="Logo Multfer" class="logo">
             </a>
             <div class="ms-auto d-flex gap-2">
-                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">Início</a>
-                <a href="{{ url_for('historico') }}" class="btn btn-primary">Histórico</a>
+                <a href="https://cloud.multfer.com.br/query" class="btn btn-outline-primary">Início</a>
+                <a href="/historico" class="btn btn-primary">Histórico</a>
             </div>
         </div>
     </nav>
@@ -53,7 +53,7 @@
                     <h1 class="h3 mb-1">Histórico de Uploads</h1>
                     <p class="text-muted mb-0">Arquivos já enviados pela ferramenta e disponíveis para download.</p>
                 </div>
-                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Novo upload</a>
+                <a href="https://cloud.multfer.com.br/query" class="btn btn-outline-secondary">Novo upload</a>
             </div>
 
             {% if files %}
@@ -85,7 +85,7 @@
             <div class="empty-state p-5 text-center">
                 <h2 class="h5 mb-2">Nenhum arquivo no histórico</h2>
                 <p class="text-muted mb-3">Os uploads válidos aparecerão aqui automaticamente.</p>
-                <a href="{{ url_for('index') }}" class="btn btn-primary">Enviar arquivos</a>
+                <a href="https://cloud.multfer.com.br/query" class="btn btn-primary">Enviar arquivos</a>
             </div>
             {% endif %}
         </div>

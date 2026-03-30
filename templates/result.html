@@ -30,11 +30,11 @@
 <body>
     <nav class="navbar navbar-expand-lg topbar">
         <div class="container py-2">
-            <a class="navbar-brand fw-semibold" href="{{ url_for('index') }}">
-                <img src="{{ url_for('static', filename='Logo-Negativo.png') }}" alt="Logo Multfer" class="logo">
+            <a class="navbar-brand fw-semibold" href="https://cloud.multfer.com.br/query">
+                <img src="/query/static/Logo-Negativo.png" alt="Logo Multfer" class="logo">
             </a>
             <div class="ms-auto d-flex gap-2">
-                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">Início</a>
+                <a href="https://cloud.multfer.com.br/query" class="btn btn-outline-primary">Início</a>
                 <a href="{{ url_for('historico') }}" class="btn btn-primary">Histórico</a>
             </div>
         </div>
@@ -46,7 +46,7 @@
             <div class="d-flex flex-wrap justify-content-center gap-3 mb-4">
                 <button class="btn btn-primary px-4" onclick="copiarTexto()">Copiar</button>
                 <a href="{{ url_for('download_sql') }}" class="btn btn-success px-4">Download SQL</a>
-                <a href="{{ url_for('index') }}" class="btn btn-secondary px-4">Voltar</a>
+                <a href="https://cloud.multfer.com.br/query" class="btn btn-secondary px-4">Voltar</a>
             </div>
             <div>
                 <label class="form-label fw-semibold">Resultado:</label>
