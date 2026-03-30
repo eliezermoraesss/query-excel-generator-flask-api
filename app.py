@@ -195,6 +195,11 @@ def gerar_query_investimento(df, file):
         if not where_clauses:
             continue
 
+        delete_sql = (
+            f"DELETE FROM AD_MIXPRO "
+            f"WHERE {' AND '.join(where_clauses)};"
+        )
+
         insert_sql = (
             f"INSERT INTO AD_MIXPRO ({', '.join(insert_fields)}) "
             f"VALUES ({', '.join(map(str, insert_values))});"
@@ -205,6 +210,7 @@ def gerar_query_investimento(df, file):
             f"WHERE {' AND '.join(where_clauses)};"
         )
 
+        all_queries.append(delete_sql)
         all_queries.append(insert_sql)
         all_queries.append(update_sql)
 
