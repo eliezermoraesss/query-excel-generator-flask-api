@@ -2,6 +2,7 @@ import io
 from datetime import datetime
 from pathlib import Path
 import unicodedata
+from uuid import uuid4
 
 import pandas as pd
 from flask import Flask, render_template, request, session, send_file, abort
@@ -10,12 +11,14 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.secret_key = "query-generator-super-secret-key"
 
-# limite de upload: 10 MB
-app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+# limite total do upload: 50 MB
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"xls", "xlsx"}
 BASE_DIR = Path(__file__).resolve().parent
 FILES_DIR = BASE_DIR / "files"
 FILES_DIR.mkdir(exist_ok=True)
+GENERATED_SQL_DIR = BASE_DIR / "generated_sql"
+GENERATED_SQL_DIR.mkdir(exist_ok=True)
 
 mapping_fiscal = {
     "DT. NEG.": "DTNEG",
@@ -143,6 +146,10 @@ def build_upload_filename(original_name):
     safe_name = secure_filename(original_name) or "arquivo.xlsx"
     return f"{timestamp}__{safe_name}"
 
+def build_sql_filename():
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    return f"{timestamp}__{uuid4().hex}.sql"
+
 def parse_upload_filename(saved_name):
     if "__" not in saved_name:
         return saved_name, None
@@ -199,7 +206,7 @@ def download_uploaded_file(filename):
 
 @app.errorhandler(413)
 def too_large(e):
-    return "Arquivo muito grande! Máximo permitido é 10 MB", 413
+    return "Upload muito grande! O total enviado deve ter no máximo 50 MB", 413
 
 def gerar_query_investimento(df, file):
     all_queries = []
@@ -337,8 +344,8 @@ def gerar_query_fiscal(df, file):
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    files = request.files.getlist("file")  # vários arquivos
-    if not files or files[0].filename == "":
+    files = [file for file in request.files.getlist("file") if file and file.filename]
+    if not files:
         return "Nenhum arquivo enviado", 400
 
     all_queries = []
@@ -383,18 +390,25 @@ def upload():
     if not all_queries:
         return "Nenhuma query gerada", 400
 
-    session["sql_file"] = "\n".join(all_queries)
+    sql_content = "\n".join(all_queries)
+    sql_filename = build_sql_filename()
+    (GENERATED_SQL_DIR / sql_filename).write_text(sql_content, encoding="utf-8")
+    session["sql_file_name"] = sql_filename
 
     return render_template("result.html", queries=all_queries)
 
 @app.route("/download")
 def download_sql():
-    sql_file = session.get("sql_file", "")
-    if not sql_file:
+    sql_filename = session.get("sql_file_name", "")
+    if not sql_filename:
         return "Nenhuma query disponível para download", 400
 
+    file_path = (GENERATED_SQL_DIR / sql_filename).resolve()
+    if file_path.parent != GENERATED_SQL_DIR.resolve() or file_path.suffix.lower() != ".sql" or not file_path.is_file():
+        abort(404)
+
     return send_file(
-        io.BytesIO(sql_file.encode("utf-8")),
+        file_path,
         as_attachment=True,
         download_name="queries.sql",
         mimetype="text/sql",
