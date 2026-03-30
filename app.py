@@ -1,7 +1,10 @@
 import io
+from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
-from flask import Flask, render_template, request, session, send_file
+from flask import Flask, render_template, request, session, send_file, abort
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = "query-generator-super-secret-key"
@@ -9,6 +12,9 @@ app.secret_key = "query-generator-super-secret-key"
 # limite de upload: 10 MB
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"xls", "xlsx"}
+BASE_DIR = Path(__file__).resolve().parent
+FILES_DIR = BASE_DIR / "files"
+FILES_DIR.mkdir(exist_ok=True)
 
 mapping_fiscal = {
     "DT. NEG.": "DTNEG",
@@ -81,9 +87,64 @@ def format_date(value, field):
     else:
         return f"{field} = TO_DATE('{value}', '{formato}')"
 
+def build_upload_filename(original_name):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    safe_name = secure_filename(original_name) or "arquivo.xlsx"
+    return f"{timestamp}__{safe_name}"
+
+def parse_upload_filename(saved_name):
+    if "__" not in saved_name:
+        return saved_name, None
+
+    timestamp_str, original_name = saved_name.split("__", 1)
+    try:
+        uploaded_at = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S_%f")
+    except ValueError:
+        uploaded_at = None
+
+    return original_name, uploaded_at
+
+def list_uploaded_files():
+    files = []
+
+    for path in sorted(FILES_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
+        if not path.is_file():
+            continue
+        if path.suffix.lower().lstrip(".") not in ALLOWED_EXTENSIONS:
+            continue
+
+        original_name, uploaded_at = parse_upload_filename(path.name)
+        files.append(
+            {
+                "saved_name": path.name,
+                "original_name": original_name,
+                "uploaded_at": uploaded_at.strftime("%d/%m/%Y %H:%M:%S") if uploaded_at else "-",
+                "size_kb": round(path.stat().st_size / 1024, 1),
+            }
+        )
+
+    return files
+
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/historico")
+def historico():
+    return render_template("history.html", files=list_uploaded_files())
+
+@app.route("/historico/download/<path:filename>")
+def download_uploaded_file(filename):
+    file_path = (FILES_DIR / filename).resolve()
+
+    if file_path.parent != FILES_DIR.resolve():
+        abort(404)
+
+    if file_path.suffix.lower().lstrip(".") not in ALLOWED_EXTENSIONS or not file_path.is_file():
+        abort(404)
+
+    original_name, _ = parse_upload_filename(file_path.name)
+    return send_file(file_path, as_attachment=True, download_name=original_name)
 
 @app.errorhandler(413)
 def too_large(e):
@@ -209,7 +270,8 @@ def upload():
             return f"Formato inválido no arquivo {file.filename}! Envie apenas .xls ou .xlsx", 400
 
         try:
-            df = pd.read_excel(file)
+            file_bytes = file.read()
+            df = pd.read_excel(io.BytesIO(file_bytes))
         except Exception as e:
             return f"Erro ao ler o arquivo {file.filename}: {e}", 400
 
@@ -228,6 +290,9 @@ def upload():
         valid_cols = [c for c in normalized_columns if c in mapping]
         if len(valid_cols) <= 1:
             return f"Arquivo {file.filename} fora do padrão necessário (colunas insuficientes)", 400
+
+        saved_name = build_upload_filename(file.filename)
+        (FILES_DIR / saved_name).write_bytes(file_bytes)
 
         if tipo_operacao == 'fiscal':
             file_queries = gerar_query_fiscal(df, file)
