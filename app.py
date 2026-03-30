@@ -1,6 +1,7 @@
 import io
 from datetime import datetime
 from pathlib import Path
+import unicodedata
 
 import pandas as pd
 from flask import Flask, render_template, request, session, send_file, abort
@@ -60,6 +61,12 @@ mapping_invest = {
     "INVESTIMENTO": {"field": "AD_INVESTIMENTO", "fixed": "'S'"}
 }
 
+investment_date_aliases = {
+    "DATA INICIO",
+    "DAT INICIO",
+    "INICIO",
+}
+
 
 # campos que precisam de TO_DATE
 date_fields = {
@@ -86,6 +93,50 @@ def format_date(value, field):
             return f"{field} = TO_DATE('{formatted}', 'dd/mm/yyyy HH24:MI:SS')"
     else:
         return f"{field} = TO_DATE('{value}', '{formato}')"
+
+def normalize_header(value):
+    normalized = unicodedata.normalize("NFKD", str(value))
+    normalized = normalized.encode("ASCII", "ignore").decode("ASCII")
+    normalized = normalized.upper().replace(".", " ")
+    return " ".join(normalized.split())
+
+def find_investment_date_column(df):
+    normalized_map = {col: normalize_header(col) for col in df.columns}
+
+    for col, normalized in normalized_map.items():
+        if normalized in investment_date_aliases:
+            return col
+
+    for col in df.columns:
+        non_null_values = df[col].dropna()
+        if non_null_values.empty:
+            continue
+
+        sample_value = non_null_values.iloc[0]
+        if isinstance(sample_value, (pd.Timestamp, datetime)):
+            return col
+
+    return None
+
+def coerce_excel_date(value):
+    if pd.isna(value):
+        return None
+
+    if isinstance(value, pd.Timestamp):
+        return value.to_pydatetime()
+
+    if isinstance(value, datetime):
+        return value
+
+    parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
+    if pd.isna(parsed):
+        return None
+
+    return parsed.to_pydatetime()
+
+def sql_date_literal(value):
+    formatted = value.strftime("%d/%m/%Y")
+    return f"TO_DATE('{formatted}', 'dd/mm/yyyy')"
 
 def build_upload_filename(original_name):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -153,6 +204,8 @@ def too_large(e):
 def gerar_query_investimento(df, file):
     all_queries = []
     df.columns = [c.strip().upper() for c in df.columns]
+    today = datetime.now().date()
+    date_column = find_investment_date_column(df)
 
     all_queries.append(f"-- Arquivo: {file.filename}")
 
@@ -161,6 +214,7 @@ def gerar_query_investimento(df, file):
         insert_values = []
         update_clauses = []
         where_clauses = []
+        key_values = {}
 
         for col, config in mapping_invest.items():
             if col not in df.columns:
@@ -185,6 +239,7 @@ def gerar_query_investimento(df, file):
 
             if config.get("key"):
                 where_clauses.append(f"{field} = {sql_value}")
+                key_values[field] = sql_value
                 insert_fields.append(field)
                 insert_values.append(sql_value)
             else:
@@ -213,6 +268,23 @@ def gerar_query_investimento(df, file):
         all_queries.append(delete_sql)
         all_queries.append(insert_sql)
         all_queries.append(update_sql)
+
+        if date_column and "CODEMP" in key_values and "CODPROD" in key_values:
+            investment_date = coerce_excel_date(row[date_column])
+
+            if investment_date and investment_date.date() < today:
+                investment_date_sql = sql_date_literal(investment_date)
+                plancomp_sql = (
+                    f"UPDATE AD_PLANCOMP SET DTINVESTIMENTO = {investment_date_sql} "
+                    f"WHERE CODEMP = {key_values['CODEMP']} "
+                    f"AND CODPROD = {key_values['CODPROD']} "
+                    f"AND DHINC = ("
+                    f"SELECT MAX(DHINC) FROM AD_PLANCOMP "
+                    f"WHERE CODEMP = {key_values['CODEMP']} "
+                    f"AND CODPROD = {key_values['CODPROD']}"
+                    f");"
+                )
+                all_queries.append(plancomp_sql)
 
     return all_queries
 
