@@ -1,30 +1,65 @@
 import io
+from datetime import datetime
+from pathlib import Path
+
 import pandas as pd
-from flask import Flask, render_template, request, session, send_file
+from flask import Flask, render_template, request, session, send_file, abort
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = "laranja"  # necessário para session
+app.secret_key = "query-generator-super-secret-key"
 
 # limite de upload: 10 MB
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"xls", "xlsx"}
+BASE_DIR = Path(__file__).resolve().parent
+FILES_DIR = BASE_DIR / "files"
+FILES_DIR.mkdir(exist_ok=True)
 
-# dicionário de mapeamento (já em uppercase para comparação)
-mapping = {
+mapping_fiscal = {
     "DT. NEG.": "DTNEG",
     "DT. ENTRADA/SAÍDA": "DTENTSAI",
     "DT. DO MOVIMENTO": "DTMOV",
     "DT. CONFIRMAÇÃO": "AD_DHCONFIRMACAO",
     "DT. DO FATURAMENTO": "DTFATUR",
     "DATA INCLUSÃO": "AD_DHINC",
+    "DT. DE ALTERAÇÃO": "DTALTER",
+    "DT. DE ALTERACAO": "DTALTER",
     "SERIE": "SERIENOTA",
+    "SERIE DA NOTA": "SERIENOTA",
+    "SÉRIE DA NOTA": "SERIENOTA",
     "CHAVE NF": "CHAVENFE",
+    "CHAVE NF-E": "CHAVENFE",
+    "CHAVE NFE": "CHAVENFE",
+    "CHVE NFE": "CHAVENFE",
+    "CHAVE ACESSO": "CHAVENFE",
+    "CHAVES ACESSO": "CHAVENFE",
+    "CHAVE DE ACESSO": "CHAVENFE",
+    "CHAVES DE ACESSO": "CHAVENFE",
+    "CONFIRMADA": "STATUSNOTA",
     "NRO. ÚNICO": "NUNOTA",
     "CENTRO RESULTADO": "CODCENCUS",
     "VENDEDOR": "CODVEND",
-    "STATUS NF-E": "STATUSNFE"
+    "STATUS NF-E": "STATUSNFE",
+    "STATUS NFE": "STATUSNFE",
+    "STATUS": "STATUSNFE",
 }
+
+mapping_invest = {
+    "EMPRESA": {"field": "CODEMP", "key": True},
+    "CODIGO": {"field": "CODPROD", "key": True},
+    "CÓDIGO": {"field": "CODPROD", "key": True},
+    "COD.": {"field": "CODPROD", "key": True},
+    "DEMANDA": {"field": "DEMANDA"},
+    "MINIMO": {"field": "ESTMIN"},
+    "MAXIMO": {"field": "ESTMAX"},
+    "DIA ESTOQUE": {"field": "DIASEST"},
+    "DIAS ESTOQUE": {"field": "DIASEST"},
+    "MULTIPLO TRF": {"field": "AGRUPTRANSFMIX"},
+    "MULTIPLO DE TRF": {"field": "AGRUPTRANSFMIX"},
+    "INVESTIMENTO": {"field": "AD_INVESTIMENTO", "fixed": "'S'"}
+}
+
 
 # campos que precisam de TO_DATE
 date_fields = {
@@ -34,6 +69,7 @@ date_fields = {
     "AD_DHCONFIRMACAO": "dd/mm/yyyy HH24:MI:SS",
     "DTFATUR": "dd/mm/yyyy HH24:MI:SS",
     "AD_DHINC": "dd/mm/yyyy HH24:MI:SS",
+    "DTALTER": "dd/mm/yyyy HH24:MI:SS"
 }
 
 def allowed_file(filename):
@@ -51,41 +87,131 @@ def format_date(value, field):
     else:
         return f"{field} = TO_DATE('{value}', '{formato}')"
 
+def build_upload_filename(original_name):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    safe_name = secure_filename(original_name) or "arquivo.xlsx"
+    return f"{timestamp}__{safe_name}"
+
+def parse_upload_filename(saved_name):
+    if "__" not in saved_name:
+        return saved_name, None
+
+    timestamp_str, original_name = saved_name.split("__", 1)
+    try:
+        uploaded_at = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S_%f")
+    except ValueError:
+        uploaded_at = None
+
+    return original_name, uploaded_at
+
+def list_uploaded_files():
+    files = []
+
+    for path in sorted(FILES_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
+        if not path.is_file():
+            continue
+        if path.suffix.lower().lstrip(".") not in ALLOWED_EXTENSIONS:
+            continue
+
+        original_name, uploaded_at = parse_upload_filename(path.name)
+        files.append(
+            {
+                "saved_name": path.name,
+                "original_name": original_name,
+                "uploaded_at": uploaded_at.strftime("%d/%m/%Y %H:%M:%S") if uploaded_at else "-",
+                "size_kb": round(path.stat().st_size / 1024, 1),
+            }
+        )
+
+    return files
+
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/historico")
+def historico():
+    return render_template("history.html", files=list_uploaded_files())
+
+@app.route("/historico/download/<path:filename>")
+def download_uploaded_file(filename):
+    file_path = (FILES_DIR / filename).resolve()
+
+    if file_path.parent != FILES_DIR.resolve():
+        abort(404)
+
+    if file_path.suffix.lower().lstrip(".") not in ALLOWED_EXTENSIONS or not file_path.is_file():
+        abort(404)
+
+    original_name, _ = parse_upload_filename(file_path.name)
+    return send_file(file_path, as_attachment=True, download_name=original_name)
 
 @app.errorhandler(413)
 def too_large(e):
     return "Arquivo muito grande! Máximo permitido é 10 MB", 413
 
-@app.route("/upload", methods=["POST"])
-def upload():
-    file = request.files.get("file")
+def gerar_query_investimento(df, file):
+    all_queries = []
+    df.columns = [c.strip().upper() for c in df.columns]
 
-    if not file or file.filename == "":
-        return "Nenhum arquivo enviado", 400
+    all_queries.append(f"-- Arquivo: {file.filename}")
 
-    if not allowed_file(file.filename):
-        return "Formato inválido! Envie apenas arquivos .xls ou .xlsx", 400
+    for _, row in df.iterrows():
+        insert_fields = []
+        insert_values = []
+        update_clauses = []
+        where_clauses = []
 
-    filename = secure_filename(file.filename)
+        for col, config in mapping_invest.items():
+            if col not in df.columns:
+                continue
 
-    try:
-        df = pd.read_excel(file)
-    except Exception as e:
-        return f"Erro ao ler o arquivo Excel: {e}", 400
+            field = config["field"]
+            value = row[col]
 
-    # normaliza colunas
-    normalized_columns = [c.strip().upper() for c in df.columns]
+            if pd.isna(value):
+                continue
 
-    # verifica se pelo menos uma coluna do mapping + NUNOTA existem
-    if "NRO. ÚNICO" not in normalized_columns:
-        return "Arquivo fora do padrão necessário (coluna Nro. Único ausente)", 400
+            if "fixed" in config:
+                insert_fields.append(field)
+                insert_values.append(config["fixed"])
+                update_clauses.append(f"{field} = {config['fixed']}")
+                continue
 
-    valid_cols = [c for c in normalized_columns if c in mapping]
-    if len(valid_cols) <= 1:  # só NUNOTA não basta
-        return "Arquivo fora do padrão necessário (colunas insuficientes)", 400
+            if isinstance(value, (int, float)):
+                sql_value = int(value)
+            else:
+                sql_value = f"'{value}'"
+
+            if config.get("key"):
+                where_clauses.append(f"{field} = {sql_value}")
+                insert_fields.append(field)
+                insert_values.append(sql_value)
+            else:
+                insert_fields.append(field)
+                insert_values.append(sql_value)
+                update_clauses.append(f"{field} = {sql_value}")
+
+        if not where_clauses:
+            continue
+
+        insert_sql = (
+            f"INSERT INTO AD_MIXPRO ({', '.join(insert_fields)}) "
+            f"VALUES ({', '.join(map(str, insert_values))});"
+        )
+
+        update_sql = (
+            f"UPDATE AD_MIXPRO SET {', '.join(update_clauses)} "
+            f"WHERE {' AND '.join(where_clauses)};"
+        )
+
+        all_queries.append(insert_sql)
+        all_queries.append(update_sql)
+
+    return all_queries
+
+def gerar_query_fiscal(df, file):
+    all_queries = []
 
     queries = []
     for _, row in df.iterrows():
@@ -94,27 +220,26 @@ def upload():
 
         for col in df.columns:
             normalized = col.strip().upper()
-            if normalized in mapping:
-                field = mapping[normalized]
+            if normalized in mapping_fiscal:
+                field = mapping_fiscal[normalized]
                 value = row[col]
 
                 if pd.isna(value):
                     continue
 
-                # pega o NUNOTA só para o WHERE
                 if field == "NUNOTA":
                     nunota_value = int(value)
                     continue
+                elif field == "STATUSNOTA":
+                    if isinstance(value, str) and value.upper().strip() == "SIM":
+                        value = "L"
 
-                # campos de data
                 if field in date_fields:
                     clause = format_date(value, field)
-                # campos de texto
                 elif isinstance(value, str):
                     if value.upper().strip() == "APROVADA":
                         value = "A"
                     clause = f"{field} = '{value}'"
-                # numéricos
                 else:
                     clause = f"{field} = {value}"
 
@@ -126,12 +251,63 @@ def upload():
         query = f"UPDATE TGFCAB SET {', '.join(set_clauses)} WHERE NUNOTA = {nunota_value};"
         queries.append(query)
 
-    if not queries:
-        return "Arquivo fora do padrão necessário (nenhuma query gerada)", 400
+    if queries:
+        all_queries.append(f"-- Arquivo: {file.filename}")
+        all_queries.extend(queries)
 
-    session["sql_file"] = "\n".join(queries)
+    return all_queries
 
-    return render_template("result.html", queries=queries)
+@app.route("/upload", methods=["POST"])
+def upload():
+    files = request.files.getlist("file")  # vários arquivos
+    if not files or files[0].filename == "":
+        return "Nenhum arquivo enviado", 400
+
+    all_queries = []
+
+    for file in files:
+        if not allowed_file(file.filename):
+            return f"Formato inválido no arquivo {file.filename}! Envie apenas .xls ou .xlsx", 400
+
+        try:
+            file_bytes = file.read()
+            df = pd.read_excel(io.BytesIO(file_bytes))
+        except Exception as e:
+            return f"Erro ao ler o arquivo {file.filename}: {e}", 400
+
+        # normaliza colunas
+        normalized_columns = [c.strip().upper() for c in df.columns]
+
+        if "NRO. ÚNICO" in normalized_columns:
+            tipo_operacao = 'fiscal'
+            mapping = mapping_fiscal
+        elif "INVESTIMENTO" in normalized_columns:
+            tipo_operacao = 'investimento'
+            mapping = mapping_invest
+        else:
+            return f"Arquivo {file.filename} fora do padrão necessário", 400
+
+        valid_cols = [c for c in normalized_columns if c in mapping]
+        if len(valid_cols) <= 1:
+            return f"Arquivo {file.filename} fora do padrão necessário (colunas insuficientes)", 400
+
+        saved_name = build_upload_filename(file.filename)
+        (FILES_DIR / saved_name).write_bytes(file_bytes)
+
+        if tipo_operacao == 'fiscal':
+            file_queries = gerar_query_fiscal(df, file)
+        elif tipo_operacao == 'investimento':
+            file_queries = gerar_query_investimento(df, file)
+
+        if file_queries:
+            all_queries.extend(file_queries)
+
+    if not all_queries:
+        return "Nenhuma query gerada", 400
+
+    session["sql_file"] = "\n".join(all_queries)
+
+    return render_template("result.html", queries=all_queries)
 
 @app.route("/download")
 def download_sql():
@@ -147,4 +323,4 @@ def download_sql():
     )
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5002)
