@@ -5,6 +5,7 @@
     <title>Resultado</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='M.ico') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<<<<<<< HEAD
     <script>
         (() => {
             const savedTheme = localStorage.getItem("query-generator-theme");
@@ -56,6 +57,17 @@
             background: var(--topbar-bg);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid var(--page-border);
+=======
+    <style>
+        body {
+            background: linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+        }
+
+        .topbar {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(20, 94, 231, 0.08);
+>>>>>>> d3aff0809cd2c7bc906ace94e97e424bb310deb4
         }
 
         .logo {
@@ -63,6 +75,7 @@
         }
 
         .result-card {
+<<<<<<< HEAD
             background: var(--page-surface);
             border: 1px solid var(--page-border);
             border-radius: 24px;
@@ -91,6 +104,11 @@
             background: var(--theme-btn-hover);
             color: var(--theme-btn-text);
             border-color: #38bdf8;
+=======
+            border: 0;
+            border-radius: 24px;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+>>>>>>> d3aff0809cd2c7bc906ace94e97e424bb310deb4
         }
     </style>
 </head>
@@ -101,7 +119,10 @@
                 <img src="/query/static/Logo-Negativo.png" alt="Logo Multfer" class="logo">
             </a>
             <div class="ms-auto d-flex gap-2">
+<<<<<<< HEAD
                 <button type="button" class="btn theme-toggle-btn" data-theme-toggle aria-label="Alternar tema">Tema branco</button>
+=======
+>>>>>>> d3aff0809cd2c7bc906ace94e97e424bb310deb4
                 <a href="https://cloud.multfer.com.br/query" class="btn btn-outline-primary">Início</a>
                 <a href="{{ url_for('historico') }}" class="btn btn-primary">Histórico</a>
             </div>
